@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TOXICTECH-MD</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
+    <!-- Socket.IO is required for real-time QR connection -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Rajdhani', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #000;
+            color: #fff;
+            overflow-x: hidden;
+            min-height: 100vh;
+            position: relative;
+            cursor: none;
+        }
+
+        /* Custom Cursor - Toxic Green Theme */
+        .cursor {
+            position: fixed;
+            width: 10px;
+            height: 10px;
+            background: #00ff88;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 10001;
+            transition: transform 0.15s ease;
+            box-shadow: 0 0 20px #00ff88;
+        }
+
+        .cursor-ring {
+            position: fixed;
+            width: 35px;
+            height: 35px;
+            border: 2px solid rgba(0, 255, 136, 0.5);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 10000;
+            transition: all 0.2s ease;
+        }
+
+        .cursor.hover { transform: scale(1.5); }
+        .cursor-ring.hover { transform: scale(1.8); border-color: #00ff88; }
+
+        /* Welcome Notification */
+        .welcome-notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.95), rgba(0, 204, 106, 0.95));
+            backdrop-filter: blur(20px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 15px 20px;
+            z-index: 10003;
+            box-shadow: 0 10px 40px rgba(0, 255, 136, 0.3);
+            transform: translateX(400px);
+            opacity: 0;
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            max-width: 320px;
+            color: #000;
+        }
+
+        .welcome-notification.show { transform: translateX(0); opacity: 1; }
+        .notification-content { display: flex; align-items: center; gap: 12px; }
+        .notification-icon { font-size: 28px; animation: bounce 1s ease-in-out infinite; }
+        
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+        
+        .notification-text { flex: 1; }
+        .notification-title { font-size: 14px; font-weight: 700; margin-bottom: 3px; }
+        .notification-message { font-size: 11px; opacity: 0.8; }
+        
+        .notification-close {
+            background: rgba(0, 0, 0, 0.2);
+            border: none;
+            width: 22px; height: 22px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: all 0.3s; font-size: 14px; color: black;
+        }
+        .notification-close:hover { background: rgba(0, 0, 0, 0.3); transform: rotate(90deg); }
+
+        /* Made By Badge */
+        .made-by {
+            position: fixed; bottom: 20px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 255, 136, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 25px; padding: 8px 16px;
+            z-index: 9997; font-size: 11px; letter-spacing: 0.5px;
+            animation: fadeInUp 1s ease-out 2s both;
+        }
+
+        .made-by-text {
+            background: linear-gradient(135deg, #00ff88, #00cc6a);
+            -webkit-background-clip: text; background-clip: text;
+            -webkit-text-fill-color: transparent; font-weight: 700;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+
+        /* Flower Animation */
+        .flower-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; overflow: hidden; }
+        .falling-flower { position: absolute; font-size: 25px; opacity: 0; pointer-events: auto; cursor: grab; user-select: none; }
+        .falling-flower.grabbed { cursor: grabbing; z-index: 9999; filter: drop-shadow(0 5px 15px rgba(0, 255, 136, 0.5)); }
+        
+        @keyframes fall { 0% { opacity: 1; transform: translateY(-100px) rotate(0deg); } 100% { opacity: 0; transform: translateY(100vh) rotate(360deg); } }
+
+        /* Music Player */
+        .music-player { position: fixed; left: 20px; bottom: 70px; z-index: 9999; display: flex; flex-direction: column; gap: 12px; }
+        
+        .music-btn {
+            width: 50px; height: 50px;
+            background: linear-gradient(135deg, #00ff88, #00cc6a);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; box-shadow: 0 5px 25px rgba(0, 255, 136, 0.4);
+            transition: all 0.3s; border: none; font-size: 20px;
+            animation: pulse-music 2s ease-in-out infinite; color: #000;
+        }
+        .music-btn:hover { transform: scale(1.1); }
+        .music-btn.playing { animation: spin 3s linear infinite, pulse-music 2s ease-in-out infinite; }
+
+        @keyframes pulse-music { 0%, 100% { transform: scale(1); box-shadow: 0 5px 25px rgba(0, 255, 136, 0.4); } 50% { transform: scale(1.05); box-shadow: 0 8px 35px rgba(0, 255, 136, 0.6); } }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .flower-selector {
+            width: 46px; height: 46px;
+            background: linear-gradient(135deg, #00ff88, #00cc6a);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; box-shadow: 0 4px 20px rgba(0, 255, 136, 0.4);
+            transition: all 0.3s; border: none; font-size: 18px;
+        }
+        .flower-selector:hover { transform: scale(1.1); }
+
+        .flower-menu { position: absolute; bottom: 55px; left: 0; background: rgba(20, 20, 20, 0.95); backdrop-filter: blur(20px); border: 2px solid rgba(0, 255, 136, 0.3); border-radius: 12px; padding: 8px; display: none; flex-direction: column; gap: 6px; }
+        .flower-menu.active { display: flex; }
+        .flower-option { background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0, 255, 136, 0.2); border-radius: 8px; padding: 6px 12px; cursor: pointer; transition: all 0.3s; font-size: 16px; text-align: center; }
+        .flower-option:hover { background: rgba(0, 255, 136, 0.3); transform: scale(1.1); }
+
+        /* Animated Background */
+        .neural-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; background: radial-gradient(ellipse at top, #0a1a0f 0%, #000 100%); }
+        canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; opacity: 0.4; }
+        
+        .grid-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: linear-gradient(rgba(0, 255, 136, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 136, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px; z-index: 2;
+            animation: gridScroll 20s linear infinite;
+        }
+
+        @keyframes gridScroll { 0% { transform: translate(0, 0); } 100% { transform: translate(50px, 50px); } }
+
+        /* Main Container */
+        .main-container { position: relative; z-index: 3; width: 100%; min-height: 100vh; padding: 15px; max-width: 500px; margin: 0 auto; }
+
+        /* Header */
+        .header { text-align: center; padding: 15px 0 25px; animation: fadeInDown 0.8s ease-out; }
+        @keyframes fadeInDown { from { opacity: 0; transform: translateY(-30px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .logo-icon {
+            width: 70px; height: 70px; border-radius: 50%;
+            border: 3px solid #00ff88; box-shadow: 0 0 25px rgba(0, 255, 136, 0.5);
+            margin-bottom: 12px; animation: float 3s ease-in-out infinite;
+        }
+        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-10px); } }
+
+        .title { font-size: 20px; font-weight: 900; font-family: 'Orbitron', monospace; color: #fff; margin-bottom: 6px; letter-spacing: 1px; }
+        .subtitle { font-size: 12px; color: rgba(255, 255, 255, 0.6); letter-spacing: 0.5px; }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 8px; margin-bottom: 20px; padding: 0 3px; }
+        
+        .tab {
+            flex: 1; padding: 10px; border-radius: 10px;
+            background: rgba(30, 30, 30, 0.8);
+            color: rgba(255, 255, 255, 0.5);
+            text-align: center; cursor: pointer;
+            transition: all 0.3s; font-weight: 600; font-size: 12px;
+            border: 1px solid transparent;
+            display: flex; align-items: center; justify-content: center; gap: 5px;
+        }
+        
+        .tab.active {
+            background: rgba(0, 255, 136, 0.15);
+            color: #00ff88;
+            border-color: #00ff88;
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.3);
+        }
+        .tab span { font-size: 14px; }
+
+        /* Inputs */
+        .input-group { margin-bottom: 12px; padding: 0 3px; }
+        .input-label { display: flex; align-items: center; gap: 5px; color: rgba(255, 255, 255, 0.8); font-size: 10px; font-weight: 700; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .input-label i { color: #00ff88; font-size: 11px; }
+        
+        input {
+            width: 100%; padding: 10px 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px;
+            background: rgba(30, 30, 30, 0.8); font-size: 13px;
+            font-family: 'Rajdhani', sans-serif; color: white;
+            outline: none; transition: all 0.3s;
+        }
+        input::placeholder { color: rgba(255, 255, 255, 0.3); }
+        input:focus { border-color: #00ff88; background: rgba(40, 40, 40, 0.9); box-shadow: 0 0 20px rgba(0, 255, 136, 0.2); }
+
+        /* Buttons */
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px; padding: 0 3px; }
+        
+        .btn {
+            padding: 11px 14px; border: none; border-radius: 10px;
+            font-size: 11px; font-weight: 700; font-family: 'Rajdhani', sans-serif;
+            cursor: pointer; transition: all 0.3s;
+            display: flex; align-items: center; justify-content: center; gap: 5px;
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        
+        .btn-primary { background: linear-gradient(135deg, #00ff88, #00cc6a); color: #000; box-shadow: 0 4px 20px rgba(0, 255, 136, 0.4); }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 25px rgba(0, 255, 136, 0.5); }
+        
+        .btn-secondary { background: transparent; color: #00ff88; border: 2px solid #00ff88; }
+        .btn-secondary:hover { background: rgba(0, 255, 136, 0.1); transform: translateY(-2px); }
+
+        /* Result Container */
+        .result-container { margin: 18px 3px; padding: 20px; border-radius: 12px; text-align: center; animation: resultSlide 0.5s ease; display: none; }
+        .result-container.show { display: block; }
+        
+        @keyframes resultSlide { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .result-container.loading { background: rgba(0, 255, 136, 0.1); border: 2px solid #00ff88; }
+        .result-container.success { background: rgba(0, 255, 100, 0.1); border: 2px solid #00ff66; }
+        .result-container.error { background: rgba(255, 0, 100, 0.1); border: 2px solid #ff0066; }
+        
+        .result-icon { font-size: 40px; margin-bottom: 12px; }
+        .result-title { font-size: 17px; font-weight: 800; margin-bottom: 12px; color: #fff; }
+        .result-text { font-size: 13px; color: rgba(255, 255, 255, 0.7); line-height: 1.5; }
+        
+        .code-display {
+            font-size: 26px; font-weight: 900; font-family: 'Orbitron', monospace;
+            letter-spacing: 6px; margin: 16px 0; cursor: pointer; padding: 14px;
+            background: rgba(0, 0, 0, 0.4); border-radius: 10px;
+            border: 2px dashed rgba(0, 255, 136, 0.4); transition: all 0.3s;
+        }
+        .code-display:hover { border-color: #00ff88; transform: scale(1.02); }
+        
+        .mini-loader { width: 45px; height: 45px; margin: 0 auto 16px; border: 4px solid rgba(0, 255, 136, 0.2); border-top: 4px solid #00ff88; border-radius: 50%; animation: spin-loader 1s linear infinite; }
+        @keyframes spin-loader { to { transform: rotate(360deg); } }
+        
+        .code-info { margin-top: 15px; padding: 15px; background: rgba(0, 0, 0, 0.3); border-radius: 8px; font-size: 12px; color: rgba(255, 255, 255, 0.7); text-align: left; line-height: 2; }
+        .code-info i { color: #00ff88; margin-right: 8px; width: 18px; }
+
+        /* QR Image Styling */
+        #qrImage { 
+            border-radius: 12px; 
+            width: 250px; 
+            height: 250px; 
+            margin: 16px auto; 
+            background: white; 
+            padding: 10px; 
+        }
+
+        /* Stats Section */
+        .stats-section { margin: 20px 3px; padding: 20px 12px; background: rgba(20, 20, 20, 0.8); border-radius: 12px; border: 1px solid rgba(0, 255, 136, 0.2); }
+        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; text-align: center; }
+        .stat-item { padding: 8px; }
+        .stat-number { font-size: 22px; font-weight: 900; font-family: 'Orbitron', monospace; color: #00ff88; margin-bottom: 5px; }
+        .stat-label { font-size: 9px; color: rgba(255, 255, 255, 0.5); letter-spacing: 0.8px; text-transform: uppercase; }
+
+        /* Features */
+        .features-list { margin: 20px 3px; padding: 20px 15px; background: rgba(20, 20, 20, 0.8); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1); }
+        .features-title { font-size: 14px; font-weight: 800; font-family: 'Orbitron', monospace; color: #00ff88; margin-bottom: 15px; text-align: center; text-transform: uppercase; letter-spacing: 1px; }
+        .feature-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px; margin-bottom: 8px; background: rgba(30, 30, 30, 0.6); border-radius: 8px; transition: all 0.3s; }
+        .feature-item:hover { background: rgba(0, 255, 136, 0.1); transform: translateX(5px); }
+        .feature-icon-small { font-size: 18px; color: #00ff88; min-width: 25px; text-align: center; margin-top: 2px; }
+        .feature-text { font-size: 12px; color: rgba(255, 255, 255, 0.8); line-height: 1.5; }
+
+        /* Info Banner */
+        .info-banner { margin: 20px 3px; padding: 16px; background: linear-gradient(135deg, rgba(0, 255, 136, 0.15), rgba(0, 204, 106, 0.15)); border-radius: 12px; border: 2px solid rgba(0, 255, 136, 0.3); text-align: center; }
+        .info-banner-title { font-size: 13px; font-weight: 800; font-family: 'Orbitron', monospace; color: #00ff88; margin-bottom: 8px; }
+        .info-banner-text { font-size: 12px; color: rgba(255, 255, 255, 0.7); line-height: 1.5; }
+
+        /* Social Links */
+        .social-section { margin: 20px 3px; text-align: center; padding-bottom: 25px; }
+        .social-title { font-size: 11px; color: rgba(255, 255, 255, 0.5); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+        .social-links { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+        .social-link { width: 40px; height: 40px; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.3s; font-size: 16px; background: rgba(30, 30, 30, 0.6); color: rgba(255, 255, 255, 0.6); cursor: pointer; }
+        .social-link:hover { border-color: #00ff88; background: rgba(0, 255, 136, 0.2); color: #00ff88; transform: translateY(-3px); }
+
+        footer { text-align: center; padding: 20px 12px; font-size: 11px; color: rgba(255, 255, 255, 0.4); border-top: 1px solid rgba(255, 255, 255, 0.1); }
+        footer a { color: #00ff88; text-decoration: none; font-weight: 700; }
+
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.3); }
+        ::-webkit-scrollbar-thumb { background: linear-gradient(135deg, #00ff88, #00cc6a); border-radius: 10px; }
+
+        @media (max-width: 768px) {
+            body { cursor: auto; }
+            .cursor, .cursor-ring { display: none; }
+            .main-container { padding: 12px; }
+            .welcome-notification { top: 15px; right: 15px; left: 15px; max-width: none; }
+            .made-by { bottom: 15px; font-size: 10px; padding: 6px 12px; }
+            .music-player { left: 15px; bottom: 65px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Custom Cursor -->
+    <div class="cursor"></div>
+    <div class="cursor-ring"></div>
+
+    <!-- Welcome Notification -->
+    <div class="welcome-notification" id="welcomeNotification">
+        <div class="notification-content">
+            <div class="notification-icon">👾</div>
+            <div class="notification-text">
+                <div class="notification-title">Welcome to TOXICTECH-MD!</div>
+                <div class="notification-message">Connect your WhatsApp bot instantly</div>
+            </div>
+            <button class="notification-close" onclick="closeNotification()">×</button>
+        </div>
+    </div>
+
+    <!-- Made By Badge -->
+    <div class="made-by">
+        Developed by <span class="made-by-text">TOXICTECH</span>
+    </div>
+
+    <!-- Flower Container -->
+    <div class="flower-container" id="flowerContainer"></div>
+
+    <!-- Music Player -->
+    <div class="music-player">
+        <button class="music-btn" id="musicBtn">🎵</button>
+        <div style="position: relative;">
+            <button class="flower-selector" id="flowerSelector">🌿</button>
+            <div class="flower-menu" id="flowerMenu">
+                <div class="flower-option" data-flower="🌿">🌿</div>
+                <div class="flower-option" data-flower="☘️">☘️</div>
+                <div class="flower-option" data-flower="🍀">🍀</div>
+                <div class="flower-option" data-flower="🎋">🎋</div>
+                <div class="flower-option" data-flower="✨">✨</div>
+                <div class="flower-option" data-flower="💎">💎</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Animated Background -->
+    <div class="neural-bg"></div>
+    <canvas id="neuralCanvas"></canvas>
+    <div class="grid-overlay"></div>
+
+    <!-- Audio Element -->
+    <audio id="bgMusic" loop></audio>
+
+    <!-- Main Container -->
+    <div class="main-container" id="mainContainer">
+        <!-- Header -->
+        <div class="header">
+            <!-- Using a placeholder icon, replace src with your bot icon -->
+            <img src="https://files.catbox.moe/lqq6ih.jpg" alt="TOXICTECH" class="logo-icon">
+            <div class="title">🌿 TOXICTECH-MD</div>
+            <div class="subtitle">Advanced WhatsApp Bot</div>
+        </div>
+
+        <!-- Status Badge -->
+        <div id="connectionStatus" style="text-align: center; margin-bottom: 15px; display: none;">
+            <span style="background: rgba(0,255,136,0.2); color: #00ff88; padding: 5px 15px; border-radius: 20px; font-size: 12px; border: 1px solid #00ff88;">
+                <i class="fas fa-circle" style="font-size: 8px; margin-right: 5px;"></i> Connected
+            </span>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('pairing')">
+                <span>📱</span> Pairing Code
+            </div>
+            <div class="tab" onclick="switchTab('qr')">
+                <span>📷</span> QR Code
+            </div>
+        </div>
+
+        <!-- Pairing Content -->
+        <div id="pairingContent">
+            <div class="input-group">
+                <label class="input-label">
+                    <i class="fas fa-phone"></i> WHATSAPP NUMBER
+                </label>
+                <input type="tel" id="phoneNumber" placeholder="94761234567" maxlength="15">
+            </div>
+
+            <div class="input-group">
+                <label class="input-label">
+                    <i class="fas fa-user"></i> YOUR NAME (OPTIONAL)
+                </label>
+                <input type="text" id="userName" placeholder="Enter your name">
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="getPairingCode()">
+                    <i class="fas fa-paper-plane"></i> GENERATE
+                </button>
+                <button class="btn btn-secondary" onclick="resetForm()">
+                    <i class="fas fa-redo"></i> RESET
+                </button>
+            </div>
+
+            <div class="result-container" id="resultBox"></div>
+        </div>
+
+        <!-- QR Content -->
+        <div id="qrContent" style="display: none;">
+            <div style="text-align: center; padding: 35px 18px;">
+                <div style="font-size: 70px; margin-bottom: 16px;">
+                    <span style="color: #00ff88;">📷</span>
+                </div>
+                <h3 style="color: white; font-size: 18px; margin-bottom: 10px; font-weight: 800;">QR Code Scanner</h3>
+                <p style="color: rgba(255,255,255,0.6); font-size: 12px; margin-bottom: 20px;">
+                    Scan with WhatsApp to connect
+                </p>
+                
+                <!-- Result Box for QR -->
+                <div class="result-container" id="qrResultBox"></div>
+
+                <button class="btn btn-primary" onclick="requestQRCode()" style="width: 100%;">
+                    <i class="fas fa-magic"></i> Generate QR Code
+                </button>
+            </div>
+        </div>
+
+        <!-- Stats Section -->
+        <div class="stats-section">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-number" id="liveUsers">50K+</div>
+                    <div class="stat-label">USERS</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">99.9%</div>
+                    <div class="stat-label">UPTIME</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">24/7</div>
+                    <div class="stat-label">ACTIVE</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Features List -->
+        <div class="features-list">
+            <div class="features-title">✨ KEY FEATURES</div>
+            <div class="feature-item">
+                <div class="feature-icon-small"><i class="fas fa-bolt"></i></div>
+                <div class="feature-text">Lightning fast connection in under 1 second</div>
+            </div>
+            <div class="feature-item">
+                <div class="feature-icon-small"><i class="fas fa-shield-alt"></i></div>
+                <div class="feature-text">Military-grade encryption for secure data</div>
+            </div>
+            <div class="feature-item">
+                <div class="feature-icon-small"><i class="fas fa-robot"></i></div>
+                <div class="feature-text">AI-powered automation & smart responses</div>
+            </div>
+            <div class="feature-item">
+                <div class="feature-icon-small"><i class="fas fa-globe"></i></div>
+                <div class="feature-text">Multi-device support with unlimited access</div>
+            </div>
+        </div>
+
+        <!-- Info Banner -->
+        <div class="info-banner">
+            <div class="info-banner-title">🔥 WHY CHOOSE TOXICTECH-MD?</div>
+            <div class="info-banner-text">
+                Fast, reliable, and secure WhatsApp bot platform trusted by thousands of users worldwide. Get started in seconds!
+            </div>
+        </div>
+
+        <!-- Social Links -->
+        <div class="social-section">
+            <div class="social-title">Connect With Us</div>
+            <div class="social-links">
+                <div class="social-link" title="WhatsApp"><i class="fab fa-whatsapp"></i></div>
+                <div class="social-link" title="Telegram"><i class="fab fa-telegram"></i></div>
+                <div class="social-link" title="GitHub"><i class="fab fa-github"></i></div>
+                <div class="social-link" title="Discord"><i class="fab fa-discord"></i></div>
+                <div class="social-link" title="YouTube"><i class="fab fa-youtube"></i></div>
+            </div>
+        </div>
+
+        <footer>
+            ✨ Developed by <a href="#">TOXICTECH-MD</a> • © 2025
+        </footer>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.0.0-alpha.1/axios.min.js"></script>
+    <script>
+        // Socket.IO Connection
+        const socket = io();
+        
+        socket.on('connect', () => {
+            console.log('Connected to server');
+        });
+
+        socket.on('status', (data) => {
+            if(data.connected) {
+                document.getElementById('connectionStatus').style.display = 'block';
+            }
+        });
+
+        socket.on('qr', (qrImage) => {
+            const qrResultBox = document.getElementById('qrResultBox');
+            qrResultBox.className = 'result-container success show';
+            qrResultBox.innerHTML = `
+                <div class="result-title">QR Code Generated!</div>
+                <img id="qrImage" src="${qrImage}" alt="QR Code">
+                <div class="code-info">
+                    <div><i class="fas fa-mobile-alt"></i> Open WhatsApp</div>
+                    <div><i class="fas fa-cog"></i> Settings → Linked Devices</div>
+                    <div><i class="fas fa-qrcode"></i> Scan this QR code</div>
+                </div>
+            `;
+        });
+
+        socket.on('pairing-code', (data) => {
+            const resultBox = document.getElementById('resultBox');
+            resultBox.className = 'result-container success show';
+            resultBox.innerHTML = `
+                <div class="result-icon"><i class="fas fa-check-circle" style="color: #00ff66;"></i></div>
+                <div class="result-title">Success!</div>
+                <div class="code-display" onclick="copyToClipboard(this)">${data.code}</div>
+                <div class="code-info">
+                    <div><i class="fas fa-mobile-alt"></i> Open WhatsApp</div>
+                    <div><i class="fas fa-cog"></i> Settings → Linked Devices</div>
+                    <div><i class="fas fa-plus-circle"></i> Link a Device</div>
+                    <div><i class="fas fa-keyboard"></i> Link with phone number</div>
+                    <div><i class="fas fa-paste"></i> Paste code: ${data.code}</div>
+                </div>
+            `;
+        });
+
+        socket.on('log', (data) => {
+            console.log(`[${data.type}] ${data.message}`);
+        });
+
+        // Welcome Notification
+        function closeNotification() {
+            const notification = document.getElementById('welcomeNotification');
+            notification.classList.remove('show');
+        }
+
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                document.getElementById('welcomeNotification').classList.add('show');
+                setTimeout(() => { closeNotification(); }, 5000);
+            }, 2000);
+        });
+
+        // Custom Cursor
+        const cursor = document.querySelector('.cursor');
+        const ring = document.querySelector('.cursor-ring');
+        let mouseX = 0, mouseY = 0;
+        let ringX = 0, ringY = 0;
+
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            cursor.style.left = mouseX + 'px';
+            cursor.style.top = mouseY + 'px';
+        });
+
+        function animateRing() {
+            ringX += (mouseX - ringX) * 0.15;
+            ringY += (mouseY - ringY) * 0.15;
+            ring.style.left = ringX + 'px';
+            ring.style.top = ringY + 'px';
+            requestAnimationFrame(animateRing);
+        }
+        animateRing();
+
+        document.querySelectorAll('a, button, .feature-item, .social-link, input, .tab, .flower-option').forEach(el => {
+            el.addEventListener('mouseenter', () => { cursor.classList.add('hover'); ring.classList.add('hover'); });
+            el.addEventListener('mouseleave', () => { cursor.classList.remove('hover'); ring.classList.remove('hover'); });
+        });
+
+        // Neural Network Animation
+        const canvas = document.getElementById('neuralCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const nodes = [];
+        const numNodes = 80;
+
+        class Node {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = (Math.random() - 0.5) * 0.5;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
+                if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(0, 255, 136, 0.5)';
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < numNodes; i++) { nodes.push(new Node()); }
+
+        function drawConnections() {
+            for (let i = 0; i < nodes.length; i++) {
+                for (let j = i + 1; j < nodes.length; j++) {
+                    const dx = nodes[i].x - nodes[j].x;
+                    const dy = nodes[i].y - nodes[j].y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < 150) {
+                        ctx.beginPath();
+                        ctx.moveTo(nodes[i].x, nodes[i].y);
+                        ctx.lineTo(nodes[j].x, nodes[j].y);
+                        ctx.strokeStyle = `rgba(0, 255, 136, ${0.2 * (1 - dist / 150)})`;
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawConnections();
+            nodes.forEach(node => { node.update(); node.draw(); });
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        // Flower Animation
+        let selectedFlower = '🌿';
+        const flowerSelector = document.getElementById('flowerSelector');
+        const flowerMenu = document.getElementById('flowerMenu');
+        const flowerOptions = document.querySelectorAll('.flower-option');
+        const flowerContainer = document.getElementById('flowerContainer');
+
+        flowerSelector.addEventListener('click', function(e) {
+            e.stopPropagation();
+            flowerMenu.classList.toggle('active');
+        });
+
+        flowerOptions.forEach(option => {
+            option.addEventListener('click', function(e) {
+                e.stopPropagation();
+                selectedFlower = this.dataset.flower;
+                flowerSelector.textContent = selectedFlower;
+                flowerMenu.classList.remove('active');
+            });
+        });
+
+        document.addEventListener('click', function() { flowerMenu.classList.remove('active'); });
+
+        class Flower {
+            constructor() {
+                this.element = document.createElement('div');
+                this.element.className = 'falling-flower';
+                this.element.textContent = selectedFlower;
+                this.startX = Math.random() * window.innerWidth;
+                this.element.style.left = this.startX + 'px';
+                this.element.style.fontSize = (Math.random() * 15 + 20) + 'px';
+                this.duration = (Math.random() * 3 + 5) + 's';
+                this.element.style.animation = `fall ${this.duration} linear forwards`;
+                this.isDragging = false;
+                this.setupDragEvents();
+                flowerContainer.appendChild(this.element);
+                setTimeout(() => { if (!this.isDragging && this.element.parentNode) this.element.remove(); }, parseFloat(this.duration) * 1000);
+            }
+
+            setupDragEvents() {
+                const onStart = (e) => {
+                    e.preventDefault();
+                    this.isDragging = true;
+                    this.element.classList.add('grabbed');
+                    const computedStyle = window.getComputedStyle(this.element);
+                    const matrix = new DOMMatrix(computedStyle.transform);
+                    this.element.style.animation = 'none';
+                    this.element.style.top = matrix.m42 + 'px';
+                    this.element.style.left = matrix.m41 + 'px';
+                    this.element.style.transform = 'none';
+                    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+                    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+                    this.dragOffsetX = clientX - parseFloat(this.element.style.left);
+                    this.dragOffsetY = clientY - parseFloat(this.element.style.top);
+                };
+
+                const onMove = (e) => {
+                    if (!this.isDragging) return;
+                    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+                    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+                    this.element.style.left = (clientX - this.dragOffsetX) + 'px';
+                    this.element.style.top = (clientY - this.dragOffsetY) + 'px';
+                };
+
+                const onEnd = () => {
+                    if (!this.isDragging) return;
+                    this.isDragging = false;
+                    this.element.classList.remove('grabbed');
+                    const currentTop = parseFloat(this.element.style.top);
+                    const remainingDistance = window.innerHeight - currentTop;
+                    const remainingTime = (remainingDistance / window.innerHeight) * parseFloat(this.duration);
+                    this.element.style.animation = `fall ${remainingTime}s linear forwards`;
+                    setTimeout(() => { if (this.element.parentNode) this.element.remove(); }, remainingTime * 1000);
+                };
+
+                this.element.addEventListener('mousedown', onStart);
+                this.element.addEventListener('touchstart', onStart, { passive: false });
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('touchmove', onMove, { passive: false });
+                document.addEventListener('mouseup', onEnd);
+                document.addEventListener('touchend', onEnd);
+            }
+        }
+
+        setInterval(() => { new Flower(); }, 300);
+
+        // Music Player
+        const songs = ['https://files.catbox.moe/x31ls3.mp3', 'https://files.catbox.moe/jydlzs.mp3', 'https://files.catbox.moe/2cbngz.mp3'];
+        const bgMusic = document.getElementById('bgMusic');
+        const musicBtn = document.getElementById('musicBtn');
+        let isMusicPlaying = false;
+
+        function playRandomSong() {
+            const randomSong = songs[Math.floor(Math.random() * songs.length)];
+            bgMusic.src = randomSong;
+            bgMusic.volume = 0.3;
+            bgMusic.play().then(() => {
+                isMusicPlaying = true;
+                musicBtn.classList.add('playing');
+                musicBtn.textContent = '⏸️';
+            }).catch(err => { console.log('Autoplay prevented:', err); });
+        }
+
+        musicBtn.addEventListener('click', function() {
+            if (isMusicPlaying) {
+                bgMusic.pause();
+                musicBtn.textContent = '🎵';
+                musicBtn.classList.remove('playing');
+                isMusicPlaying = false;
+            } else {
+                if (!bgMusic.src || bgMusic.ended) playRandomSong();
+                else {
+                    bgMusic.play();
+                    musicBtn.textContent = '⏸️';
+                    musicBtn.classList.add('playing');
+                    isMusicPlaying = true;
+                }
+            }
+        });
+
+        bgMusic.addEventListener('ended', () => { playRandomSong(); });
+
+        // Switch Tab
+        function switchTab(tab) {
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(t => t.classList.remove('active'));
+            event.target.closest('.tab').classList.add('active');
+
+            if (tab === 'pairing') {
+                document.getElementById('pairingContent').style.display = 'block';
+                document.getElementById('qrContent').style.display = 'none';
+            } else {
+                document.getElementById('pairingContent').style.display = 'none';
+                document.getElementById('qrContent').style.display = 'block';
+            }
+        }
+
+        // Get Pairing Code (Socket.IO Version)
+        function getPairingCode() {
+            const phone = document.getElementById('phoneNumber').value.replace(/[^0-9]/g, '');
+            const name = document.getElementById('userName').value.trim();
+
+            if (!phone) {
+                showResult('error', `
+                    <div class="result-icon"><i class="fas fa-exclamation-triangle" style="color: #ff0066;"></i></div>
+                    <div class="result-title">Phone Number Required!</div>
+                    <div class="result-text">Please enter your WhatsApp number</div>
+                `, 'resultBox');
+                return;
+            }
+
+            if (phone.length < 10) {
+                showResult('error', `
+                    <div class="result-icon"><i class="fas fa-times-circle" style="color: #ff0066;"></i></div>
+                    <div class="result-title">Invalid Number!</div>
+                    <div class="result-text">Please check your number</div>
+                `, 'resultBox');
+                return;
+            }
+
+            showResult('loading', `
+                <div class="mini-loader"></div>
+                <div class="result-title">Connecting...</div>
+                <div class="result-text">Generating your pairing code</div>
+            `, 'resultBox');
+
+            // Emit event to server
+            socket.emit('request-pairing', phone);
+        }
+
+        function requestQRCode() {
+            showResult('loading', `
+                <div class="mini-loader"></div>
+                <div class="result-title">Generating...</div>
+                <div class="result-text">Please wait while we generate your QR code</div>
+            `, 'qrResultBox');
+            
+            // Request QR via HTTP (fallback) or just wait for socket event
+            // For this example, we trigger the event that would be fired by server logic
+            // In a real app, you might need to initialize a new session here via API
+            axios.get('/qr').then(res => {
+                 if(res.data.qr) {
+                    socket.emit('qr', res.data.qr); // Simulate socket event if using HTTP
+                 }
+            }).catch(() => {
+                 // If no HTTP endpoint, rely purely on socket connection logic from server
+                 showResult('error', `
+                    <div class="result-icon"><i class="fas fa-exclamation-circle" style="color: #ff0066;"></i></div>
+                    <div class="result-title">Error</div>
+                    <div class="result-text">Could not generate QR. Make sure server is running.</div>
+                `, 'qrResultBox');
+            });
+        }
+
+        function showResult(type, content, boxId = 'resultBox') {
+            const resultBox = document.getElementById(boxId);
+            resultBox.className = `result-container ${type} show`;
+            resultBox.innerHTML = content;
+            setTimeout(() => { resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 100);
+        }
+
+        function copyToClipboard(element) {
+            const code = element.textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                const original = element.textContent;
+                element.innerHTML = '<i class="fas fa-check"></i> COPIED!';
+                element.style.background = 'rgba(0, 255, 102, 0.2)';
+                element.style.borderColor = '#00ff66';
+                setTimeout(() => {
+                    element.textContent = original;
+                    element.style.background = 'rgba(0, 0, 0, 0.4)';
+                    element.style.borderColor = 'rgba(0, 255, 136, 0.4)';
+                }, 2000);
+            }).catch(() => { alert('Copy manually: ' + code); });
+        }
+
+        function resetForm() {
+            document.getElementById('phoneNumber').value = '';
+            document.getElementById('userName').value = '';
+            document.getElementById('resultBox').classList.remove('show');
+        }
+
+        // Animated Stats Counter
+        let totalUsers = 50000;
+        setInterval(() => {
+            totalUsers += Math.floor(Math.random() * 5);
+            const userEl = document.getElementById('liveUsers');
+            if (userEl) userEl.textContent = (totalUsers / 1000).toFixed(0) + 'K+';
+        }, 3000);
+
+        // Enter key submit
+        document.addEventListener('DOMContentLoaded', () => {
+            const phoneInput = document.getElementById('phoneNumber');
+            const nameInput = document.getElementById('userName');
+            
+            if (phoneInput) phoneInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); getPairingCode(); } });
+            if (nameInput) nameInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); getPairingCode(); } });
+
+            let lastTouchEnd = 0;
+            document.addEventListener('touchend', (e) => {
+                const now = Date.now();
+                if (now - lastTouchEnd <= 300) e.preventDefault();
+                lastTouchEnd = now;
+            }, false);
+        });
+
+        // Auto-start music on first interaction
+        let firstInteraction = true;
+        document.addEventListener('click', () => {
+            if (firstInteraction && !isMusicPlaying) { playRandomSong(); firstInteraction = false; }
+        }, { once: true });
+
+        document.addEventListener('touchstart', () => {
+            if (firstInteraction && !isMusicPlaying) { playRandomSong(); firstInteraction = false; }
+        }, { once: true });
+    </script>
+</body>
+</html>
