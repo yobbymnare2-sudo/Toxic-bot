@@ -1,13 +1,24 @@
 {
-  "name": "mini-bot",
+  "name": "toxic-yobby-md",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "TOXICYOBBY-MD WhatsApp Bot",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.5.6",
-    "pino": "^8.10.0",
-    "express": "^4.18.2"
+    "@whiskeysockets/baileys": "^6.6.0",
+    "express": "^4.18.2",
+    "hapi": "^18.1.0",
+    "pino": "^8.16.2",
+    "qrcode": "^1.5.3",
+    "socket.io": "^4.7.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
